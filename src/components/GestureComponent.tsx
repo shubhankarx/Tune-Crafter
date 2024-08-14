@@ -3,11 +3,13 @@ import ReactGA from 'react-ga4';
 import RegionsPlugin from 'wavesurfer.js/src/plugin/regions';
 import 'bootstrap/dist/css/bootstrap.css';
 
-import { GestureRecognizer, FilesetResolver, DrawingUtils } from '../../node_modules/@mediapipe/tasks-vision';
+import { GestureRecognizer, FilesetResolver, DrawingUtils } from '@mediapipe/tasks-vision';
 import WaveSurfer from "wavesurfer.js";
+import * as tf from '@tensorflow/tfjs';
 import { GestureModel } from "../models/GestureModel";
 import { AudioManager } from "../AudioManager";
 import VolumeProgressBar from "./VolumeProgressBar";
+
 
 export interface Coordinates {
     x: number;
@@ -21,29 +23,36 @@ interface GestureComponentProps {
 }
 
 const GestureComponent = (props: GestureComponentProps) => {
-    // Define a sensitivity value to control effect change speed
-    var video = props.video;
-    var waveform = props.waveform;
-    var soundManager = props.soundManager;
-    var gestureRecognizer: GestureRecognizer | null = null;
+    const { video, waveform, soundManager } = props;
+    let gestureRecognizer: GestureRecognizer | null = null;
 
-    var canvasElement: any | null = null;
-    var canvasCtx: any | null = null;
-    var results: any = undefined;
+    let canvasElement: any | null = null;
+    let canvasCtx: any | null = null;
+    let results: any = undefined;
     const videoHeight = "100vh";
     const videoWidth = "auto";
-    var volumeTimer: any = null;
-    
+    let volumeTimer: any = null;
+
     const model: GestureModel = new GestureModel(soundManager);
 
     const [volume, setVolume] = useState<number>(50);
     const [isVolumeVisible, setIsVolumeVisible] = useState<boolean>(false);
-    // var lastVideoTime: any = -1;
+    const [isRecording, setIsRecording] = useState<boolean>(false);
 
-    // Excecuted every time the video or the waveForm change
+    const handleRecordButtonClick = () => {
+        setIsRecording(!isRecording);
+        console.log(isRecording ? "Stopped Recording" : "Started Recording");
+    };
+
+    const [recordedGestures, setRecordedGestures] = useState<any[]>([]);
+    const [classifier, setClassifier] = useState<any>(null);
+    const [buttonColor, setButtonColor] = useState<string>('blue');
+
     useEffect(() => {
         if (video && waveform && gestureRecognizer == null) {
+            //console.log("Initializing gesture recognizer...");
             createGestureRecognizer().then(() => {
+                //console.log("Gesture recognizer initialized.");
                 video?.addEventListener("loadeddata", predictWebcam);
                 requestAnimationFrame(() => {
                     predictWebcam();
@@ -53,18 +62,13 @@ const GestureComponent = (props: GestureComponentProps) => {
         }
     }, [video, waveform]);
 
-    /**
-     * Function to create the gestureRecognizer and initialization of the regions (used to create loops in the music flow)
-     */
     const createGestureRecognizer = async () => {
         let recognizer = await loadModelWithRetry();
         if (recognizer) {
             gestureRecognizer = recognizer;
-        }
-
-        if (!gestureRecognizer) {
-            console.error("Model loading failed after all retry attempts.");
-            // Handle the failure case here
+            //console.log("Gesture recognizer created successfully.");
+        } else {
+            console.error("Gesture recognizer creation failed.");
         }
 
         if (!model.haveRegions()) {
@@ -84,15 +88,16 @@ const GestureComponent = (props: GestureComponentProps) => {
             });
             model.setRegions(regions);
         }
-    }
+    };
 
     async function loadModelWithRetry() {
-        let maxRetries = 3; // Maximum number of retry attempts
+        let maxRetries = 3;
         let currentRetry = 0;
         let recognizer;
 
         while (currentRetry < maxRetries) {
             try {
+                //(`Loading model, attempt #${currentRetry + 1}`);
                 const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm");
                 recognizer = await GestureRecognizer.createFromOptions(vision, {
                     baseOptions: {
@@ -101,59 +106,50 @@ const GestureComponent = (props: GestureComponentProps) => {
                     numHands: 2,
                     runningMode: "VIDEO"
                 });
-                break; // If loading is successful, exit the loop
+                break;
             } catch (error) {
-                console.error("An error occurred on attempt #" + (currentRetry + 1) + ":", error);
-
-                // Calculate and log the percentage of completion
-                const percentage = ((currentRetry + 1) / maxRetries) * 100;
-                console.log("Loading progress: " + percentage.toFixed(2) + "%");
-
+                console.error(`Error on attempt #${currentRetry + 1}:`, error);
                 currentRetry++;
-
-                if (currentRetry < maxRetries) {
-                    // You can add a delay before the next retry if needed
-                    // await new Promise(resolve => setTimeout(resolve, retryDelayMilliseconds));
-                } else {
+                if (currentRetry >= maxRetries) {
                     console.error("Maximum retry attempts reached. Model loading failed.");
-                    break; // Exit the loop if max retries are reached
                 }
             }
         }
-
-        return recognizer; // Return the loaded recognizer or null if all retries failed
+        console.log("Model loading completed with status:", recognizer ? "Success" : "Failed");
+        return recognizer;
     }
 
-
-    /**
-     * Function to predict gestures from the webcam feed
-     */
-    const predictWebcam = () => {
-        // Start detecting the stream
+    const predictWebcam = async () => {
         if (gestureRecognizer) {
             setupCanvas();
             if (video && video.videoHeight > 0 && video.videoWidth > 0) {
+                //console.log("Video is loaded and has dimensions:", video.videoHeight, video.videoWidth);
                 try {
-                    results = gestureRecognizer.recognizeForVideo(video, Date.now());
+                    results = await gestureRecognizer.recognizeForVideo(video, Date.now());
+                    //console.log("Gesture recognizer returned results:", results);
+                    if (isRecording) {
+                        storeGesture(results);
+                    }
+                    if (classifier) {
+                        recognizeGesture(results.landmarks);
+                    }
+                    drawHands();
+                    performAction();
                 } catch (error) {
-                    console.error(error);
+                    console.error("Error during gesture recognition:", error);
                 }
+            } else {
+                console.log("Video not ready or dimensions not available.");
             }
-            drawHands();
-            performAction();
-            requestAnimationFrame(() => {
-                predictWebcam();
-            });
-            // window.requestAnimationFrame(predictWebcam.bind(this));
+            requestAnimationFrame(predictWebcam);
+        } else {
+            console.log("Gesture recognizer not initialized.");
         }
     };
 
-    /**
-     * Function to load in advance all the sounds used in the application in the AudioManager
-     */
     const setAudioObjects = () => {
         soundManager.loadAllSounds();
-    }
+    };
 
     const setupCanvas = () => {
         if (canvasCtx == undefined) {
@@ -162,39 +158,30 @@ const GestureComponent = (props: GestureComponentProps) => {
             canvasElement.style.height = videoHeight;
             canvasElement.style.width = videoWidth;
         }
-
         canvasCtx.save();
         canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-    }
+    };
 
-    /**
-     * Function to render the user's hands skeleton
-     */
     const drawHands = () => {
+        //console.log("Drawing hands...");
         const drawingUtils = new DrawingUtils(canvasCtx);
-        if (results && results.landmarks) {
+        if (results && results.landmarks.length > 0) {
             for (const landmarks of results.landmarks) {
                 drawingUtils.drawConnectors(
                     landmarks,
                     GestureRecognizer.HAND_CONNECTIONS,
-                    {
-                        color: "#FFFFFF",
-                        lineWidth: 5
-                    }
+                    { color: "#FFFFFF", lineWidth: 5 }
                 );
-                drawingUtils.drawLandmarks(landmarks, {
-                    color: "#B01EB0",
-                    lineWidth: 2
-                });
+                drawingUtils.drawLandmarks(landmarks, { color: "#B01EB0", lineWidth: 2 });
             }
+        } else {
+            //console.log("No landmarks detected.");
         }
         canvasCtx.restore();
-    }
+    };
 
-    /**
-     * Function from which all the handles are called
-     */
     const performAction = () => {
+        //console.log("Performing action based on gesture...");
         if (results && results.gestures.length == 0) {
             let current_gesture = document.getElementById('current_gesture') as HTMLOutputElement;
             current_gesture.innerText = "🙌";
@@ -213,60 +200,40 @@ const GestureComponent = (props: GestureComponentProps) => {
                 handleVolume(results.landmarks[i]);
             }
         }
-    }
+    };
 
-    /**
-     * Function to detect the specific action returned by the model
-     */
     const detectAction = (categoryName: string, handedness: string, landmarks: any) => {
         let current_gesture = document.getElementById('current_gesture') as HTMLOutputElement;
         model.updateFSMStates(categoryName, handedness, landmarks, current_gesture, model.wsRegions);
         setGestureMesssage();
-    }
+    };
 
-    /**
-     * Function setting the "guide" messages shown to the users
-     */
     const setGestureMesssage = () => {
         let current_gesture = document.getElementById('current_gesture') as HTMLOutputElement;
         let cutText = model.getCutText();
         if (cutText) {
             current_gesture.innerText = cutText;
         }
-    }
+    };
 
-    /**
-     * Function to handle "drums" effects. Mapped to each finger (through the relative landmark)
-     */
     const handleDrums = (handedness: string, landmarks: any) => {
-        //DRUMS detect and managing
         if (handedness == "Left") {
             let sound = model.getDrumSound(landmarks);
             if (sound) {
-                ReactGA.event({
-                    category: 'User Interaction',
-                    action: 'gesture',
-                    label: sound,
-                });
+                ReactGA.event({ category: 'User Interaction', action: 'gesture', label: sound });
                 soundManager.playSound(sound);
                 let current_gesture = document.getElementById('current_gesture') as HTMLOutputElement;
                 current_gesture.innerText = "🥁 ✅";
             }
         }
-    }
+    };
 
-    /**
-     * Function to handle play/pause based on detected gestures (Closed_Fist)
-     */
     const handlePlayPause = () => {
         if (waveform && model.runPlayPause()) {
             waveform.playPause();
         }
-    }
+    };
 
-    /**
-     * Function to handle audio effects based on detected gestures (Thumb_Up)
-     */
     const handleEffects = (handedness: string, landmarks: any) => {
         let speedText = model.getSpeedText(landmarks, handedness);
         if (speedText) {
@@ -274,20 +241,14 @@ const GestureComponent = (props: GestureComponentProps) => {
             current_gesture.innerText = speedText;
             waveform?.setPlaybackRate(soundManager.getSpeedValue());
         }
-    }
+    };
 
-    /**
-     * Function to handle waveform regions based on detected gestures (creation and deletion)
-     */
     const handleRegions = () => {
         if (waveform) {
             model.handleLoopRegions(waveform.getCurrentTime());
         }
-    }
+    };
 
-    /**
-     * Function to handle volume control based on the gesture detected
-     */
     const handleVolume = (landmarks: any) => {
         if (model.isVolumeStarted()) {
             let currentVolume: number = 1 - landmarks[8].x;
@@ -295,7 +256,6 @@ const GestureComponent = (props: GestureComponentProps) => {
             setIsVolumeVisible(true);
             waveform?.setVolume(currentVolume);
 
-            //To let finish the Timeout only when the the user changes gesture
             if (volumeTimer != null) {
                 clearTimeout(volumeTimer);
             }
@@ -304,7 +264,68 @@ const GestureComponent = (props: GestureComponentProps) => {
                 volumeTimer = null;
             }, 3000);
         }
-    }
+    };
+
+    const storeGesture = (results: any) => {
+        if (results && results.landmarks) {
+            const landmarks = results.landmarks[0];
+            const features = landmarks.map((point: any) => [point.x, point.y, point.z]);
+            setRecordedGestures(prevData => {
+                const updatedGestures = [...prevData, { x: features, y: "gestureLabel" }];
+                console.log("Gesture recorded:", updatedGestures);
+                return updatedGestures;
+            });
+            console.log("Gesture data stored:", { x: features.flat(), y: "gestureLabel" });
+        }
+    };
+
+    const trainModel = () => {
+        if (recordedGestures.length > 0) {
+            const inputs = recordedGestures.map(data => data.x);
+            const labels = recordedGestures.map(data => data.y === "gestureLabel" ? [1, 0, 0, 0] : [0, 1, 0, 0]);
+
+            const xs = tf.tensor2d(inputs);
+            const ys = tf.tensor2d(labels);
+
+            const model = tf.sequential();
+            model.add(tf.layers.dense({ units: 64, activation: 'relu', inputShape: [inputs[0].length] }));
+            model.add(tf.layers.dense({ units: 32, activation: 'relu' }));
+            model.add(tf.layers.dense({ units: 4, activation: 'softmax' }));
+
+            model.compile({
+                optimizer: 'adam',
+                loss: 'categoricalCrossentropy',
+                metrics: ['accuracy'],
+            });
+
+            model.fit(xs, ys, {
+                epochs: 20,
+                callbacks: {
+                    onEpochEnd: (epoch, logs) => {
+                        console.log(`Epoch ${epoch}: loss = ${logs?.loss}`);
+                    }
+                }
+            }).then(() => {
+                setClassifier(model);
+                console.log("Model trained");
+            });
+        } else {
+            console.log("No recorded gestures to train on.");
+        }
+    };
+
+    const recognizeGesture = (landmarks: any) => {
+        if (classifier) {
+            const features = landmarks.map((point: any) => [point.x, point.y, point.z]).flat();
+            const input = tf.tensor2d([features]);
+            classifier.predict(input).array().then((predictions: any) => {
+                console.log("Gesture recognized:", predictions);
+                // Implement sound playback based on the recognized gesture
+            });
+        } else {
+            console.log("Classifier not available.");
+        }
+    };
 
     return (
         <>
@@ -316,8 +337,20 @@ const GestureComponent = (props: GestureComponentProps) => {
                 <VolumeProgressBar volume={volume}></VolumeProgressBar>
             </div>
             <div>
-                <canvas className="output_canvas" id="output_canvas" width="1280" height="720" />
+            <canvas className="output_canvas" id="output_canvas" width="1280" height="720" style={{ position: 'absolute', top: 0, left: 0, zIndex: 1 }} />
             </div>
+            <button
+                onClick={handleRecordButtonClick}
+                style={{ backgroundColor: isRecording ? 'green' : 'blue', color: 'white', padding: '10px', borderRadius: '5px', position: 'relative', zIndex: 2 }}
+>
+                {isRecording ? "Stop Recording" : "Start Recording"}
+            </button>
+            <button onClick={() => {
+                console.log("Train Model button clicked");
+                trainModel();
+            }}style={{ backgroundColor: 'blue', color: 'white', padding: '10px', borderRadius: '5px', position: 'relative', zIndex: 2 }}
+>  
+                Train Model</button>
         </>
     );
 };
