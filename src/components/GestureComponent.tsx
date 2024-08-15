@@ -38,15 +38,58 @@ const GestureComponent = (props: GestureComponentProps) => {
     const [volume, setVolume] = useState<number>(50);
     const [isVolumeVisible, setIsVolumeVisible] = useState<boolean>(false);
     const [isRecording, setIsRecording] = useState<boolean>(false);
+    const [recordingStartTime, setRecordingStartTime] = useState<number | null>(null); //msx: manage recording time
+    const [frameBuffer, setFrameBuffer] = useState<any[]>([]); //msxL manage frame buffer
 
     const handleRecordButtonClick = () => {
-        setIsRecording(!isRecording);
-        console.log(isRecording ? "Stopped Recording" : "Started Recording");
+        setIsRecording(prevIsRecording => {
+            const newRecordingState = !prevIsRecording;
+            console.log(newRecordingState ? "Started Recording" : "Stopped Recording");
+            
+            if (newRecordingState) {
+                startRecording(); // Start recording if the new state is true
+            } else {
+                stopRecording(); // Stop recording if the new state is false
+            }
+    
+            return newRecordingState;
+        });
     };
-
+    
     const [recordedGestures, setRecordedGestures] = useState<any[]>([]);
     const [classifier, setClassifier] = useState<any>(null);
     const [buttonColor, setButtonColor] = useState<string>('blue');
+
+    //msx: This function starts the recording process by initializing the buffer and setting the recording state
+    const startRecording = () => {
+        setIsRecording(true);
+        setFrameBuffer([]); // Clear any previous data
+        setRecordingStartTime(Date.now()); // Record the start time
+    };
+
+    //msx: Captures a single frame of gesture data and adds it to the frame buffer
+    const captureFrame = (landmarks: any) => {
+        if (isRecording && recordingStartTime) {
+            const features = extractGestureFeatures(landmarks);
+            setFrameBuffer(prevBuffer => [...prevBuffer, features]); // Add the current frame's features to the buffer
+        }
+    };
+
+    //msx: Stops the recording process, stores the gesture, and resets the recording state
+    const stopRecording = () => {
+        if (isRecording) {
+            setIsRecording(false);
+            const duration = Date.now() - (recordingStartTime || 0); // Calculate the duration of the recording
+            if (frameBuffer.length > 0) {
+                const gesture = { x: frameBuffer, y: "gestureLabel", duration }; // Store the gesture along with its duration
+                setRecordedGestures(prevGestures => [...prevGestures, gesture]); // Save the gesture
+                console.log("Gesture recorded:", gesture);
+            }
+            setRecordingStartTime(null); // Reset the recording start time
+        }
+    };
+
+
 
     useEffect(() => {
         if (video && waveform && gestureRecognizer == null) {
@@ -126,11 +169,17 @@ const GestureComponent = (props: GestureComponentProps) => {
                 //console.log("Video is loaded and has dimensions:", video.videoHeight, video.videoWidth);
                 try {
                     results = await gestureRecognizer.recognizeForVideo(video, Date.now());
+                    console.log("Gesture recognizer results:", results); // Add this log
                     //console.log("Gesture recognizer returned results:", results);
                     if (isRecording) {
+                        console.log("Attempting to store gesture"); // Log before storing
                         storeGesture(results);
                     }
+                    else {
+                        console.log("Recording is not active, not storing gesture");
+                    }
                     if (classifier) {
+                        console.log("Attempting to recognize gesture"); // Log before recognizing
                         recognizeGesture(results.landmarks);
                     }
                     drawHands();
@@ -266,16 +315,34 @@ const GestureComponent = (props: GestureComponentProps) => {
         }
     };
 
+    //msx: Extract gesture features using a consistent function
+    const extractGestureFeatures = (landmarks: any) => {
+        if (!landmarks || landmarks.length === 0) return [0.0, 0.0, 0.0, 0.0, 0.0];
+        const keypoint = landmarks[8]; // Assume index 8 for a specific keypoint, Index Finger here, can be adjusted
+        return [keypoint.x, keypoint.y, keypoint.z || 0.0]; // Consider x, y, and possibly z if available
+    };
+    
     const storeGesture = (results: any) => {
-        if (results && results.landmarks) {
-            const landmarks = results.landmarks[0];
-            const features = landmarks.map((point: any) => [point.x, point.y, point.z]);
+        console.log("Gesture recognizer results:", results); // Check what `results` contains
+    
+        if (results && results.landmarks && results.landmarks.length > 0) {
+            captureFrame(results.landmarks[0]);
+            //const landmarks = results.landmarks[8];
+            //const features = extractGestureFeatures(results.landmarks[0]);
+            
+            //landmarks.map((point: any) => [point.x, point.y, point.z]);
+            /* 
+            
+            
+            console.log("Storing gesture features:", features); 
             setRecordedGestures(prevData => {
                 const updatedGestures = [...prevData, { x: features, y: "gestureLabel" }];
                 console.log("Gesture recorded:", updatedGestures);
                 return updatedGestures;
             });
             console.log("Gesture data stored:", { x: features.flat(), y: "gestureLabel" });
+            */
+
         }
     };
 
@@ -316,7 +383,8 @@ const GestureComponent = (props: GestureComponentProps) => {
 
     const recognizeGesture = (landmarks: any) => {
         if (classifier) {
-            const features = landmarks.map((point: any) => [point.x, point.y, point.z]).flat();
+            const features = extractGestureFeatures(landmarks[0]).flat();
+             //landmarks.map((point: any) => [point.x, point.y, point.z]).flat();
             const input = tf.tensor2d([features]);
             classifier.predict(input).array().then((predictions: any) => {
                 console.log("Gesture recognized:", predictions);

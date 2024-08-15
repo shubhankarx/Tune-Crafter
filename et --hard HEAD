@@ -1,0 +1,113 @@
+[33m72694d5[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Update with added Gesture recording variable and code for ML using tensor flow and MLP Classifier
+[33m01618cc[m Piano Mode
+[33mc87d57d[m Merge fix
+[33m8e2a0f5[m Merge branch 'christmas-mode'
+[33m76ac277[m Fixed Speed Control
+[33m90a7c40[m linkedin
+[33m8fbf083[m z-index
+[33mca0114d[m merge
+[33m628076b[m Christmas
+[33m3104140[m merge
+[33md066693[m New style
+[33ma19ab55[m clean
+[33mf1eb802[m Track numbers
+[33mc5c1232[m Disclamer for Safari
+[33mc6708f6[m time increased for speach
+[33ma13078b[m Speach recognition
+[33m390428b[m New design
+[33m5a4a640[m Refactor AudioManager, delete SpeechComponent Model. Changed the logic behind the hidden musics. Added another easter egg. Created global mode exported and used from the components that need it
+[33mf788510[m Speech GA4
+[33m777f768[m GA4
+[33m4f19d9a[m Google Analytics events
+[33m3cd0c44[m Working on safari
+[33ma8374bf[m Working on safari
+[33mb6ee74c[m New Work
+[33m2735dba[m Merge branch 'main' of github.com:scavalleroo/Tune-Crafter
+[33m6194b45[m old references
+[33m8ae4212[m Create jekyll-gh-pages.yml
+[33mc4325fd[m Network paths
+[33m0df7867[m Deploy on github
+[33m81935aa[m New song
+[33m6ecd8c3[m List of gestures and voice commands
+[33m0201de6[m Merge branch 'main' of https://github.com/scavalleroo/Tune-Crafter
+[33m4f2a066[m Comments
+[33m265a109[m Readme
+[33m173ad1a[m Models and Components
+[33m861789a[m Gesture Model
+[33me1051ef[m First refactor
+[33m3111446[m First changes
+[33m4f9a404[m Final version
+[33m919f3e3[m Final version
+[33mb01865f[m Merge
+[33m2391760[m Clean
+[33m5182ebb[m Voice Commands
+[33mee7eaf0[m Voice
+[33m6435177[m new sounds
+[33mdaa30c9[m New Sounds
+[33m499480c[m Effects managing
+[33m5654cff[m New files
+[33m05ebec7[m New UI
+[33ma6e43d2[m Max volume to 100 fixed
+[33mcaec7c8[m Merge branch 'main' of github.com:scavalleroo/Tune-Crafter
+[33me6b9fc8[m New audio
+[33mca4f0c8[m Small changes
+[33me64864c[m waveSurfer color
+[33mee75205[m Volume and initial UI setup
+[33m900dba7[m Merge branch 'main' of https://github.com/scavalleroo/Tune-Crafter
+[33m875021e[m Merge pull request #6 from scavalleroo/AdditionalGestures
+[33mdf9d318[m Full refactor and volume (still not working)
+[33m5d83d8a[m Merge pull request #5 from scavalleroo/otherGestures
+[33m917dd04[m Style
+[33meebad4c[m Improved Socket Server and Client
+[33mbd96cb4[m Socket Server Client improved
+[33m5869300[m Volume control and first try with volume progress bar
+[33m7205c0b[m Fix main music stop/play
+[33mac189c6[m Drums usable version without looping
+[33m0ca9df2[m Buffer as a new dependency in package-lock
+[33m9db34d6[m Merge branch 'OtherGestures' into AdditionalGestures
+[33m14941d5[m VolumeState added
+[33m4d007f9[m Accessed AudioCOntext from the waveSurfer
+[33md8449bf[m First attempts with icons over the fingers tips
+[33mb815bc9[m Sockets
+[33m1756ff0[m Merge branch 'main' of https://github.com/scavalleroo/Tune-Crafter
+[33mcd34ffb[m First try with icons
+[33m22ec20c[m AudioManager and AudioScheduler + first try for AudioContext also on the main music
+[33m1d725a6[m SoundManager class implementation
+[33m16abd2a[m SoundManager definition
+[33m9659e3e[m Merge branch 'AdditionalGestures'
+[33m27fd631[m Merge
+[33m3ce0647[m DrumState updated
+[33mcface69[m Merge branch 'AdditionalGestures'
+[33mb7bbe21[m Refactor
+[33m1f8ac7e[m Merge branch 'main' into AdditionalGestures
+[33m4454141[m Merge branch 'main' of https://github.com/scavalleroo/Tune-Crafter
+[33mff4b933[m Fix merge
+[33m6602e07[m Merge branch 'main' into AdditionalGestures
+[33m1b9c75f[m Working with GestureController
+[33m9fa9a2b[m Merge branch 'main' of https://github.com/scavalleroo/Tune-Crafter
+[33m77d912d[m Fix unused variable
+[33m173031c[m Gesture
+[33m7cec16c[m GestureController
+[33mbe1a91f[m Making everything in the finiteStaeMachine way
+[33me73e6e7[m Merge branch 'main' of and bringing putting everything in the FiniteStateMachine way
+[33mcd9c1ca[m Audio change
+[33m8ac8b75[m Cut interaction
+[33m0905924[m Preprocessing of the audios
+[33mdb1f745[m Drums controls
+[33ma5a723a[m Victory
+[33m37e7109[m Merge pull request #4 from scavalleroo/ReactMediapipeGestureRec
+[33mc85d217[m Controlling play and pause
+[33mfba1dd3[m Merge pull request #2 from scavalleroo/ReactMediapipeGestureRec
+[33m432565a[m Cleaning project, keeping just the essential to make it run
+[33m43cb86b[m First protorype in Tune-Crafter-React-Webapp
+[33m0772953[m Setup React
+[33m9438420[m Tried to make it with just js
+[33m3e43c44[m Tried just with js
+[33ma9ab234[m Tried without Node but problem with the build and the access to the app.js file
+[33mf84b897[m MediaPipe implementation with problems with the envirnment (Node not accepted for some reasons)
+[33me089bd5[m Merge pull request #1 from scavalleroo/MediaPipeGestureRec
+[33mcd87fd8[m Delete of React, setup Typescript + Node project
+[33maf9e9bb[m First changes in the main page (old code mantained as a reference)
+[33m30e19af[m Task vision package
+[33ma41b110[m Web-app initial commit
+[33m0d82d3d[m Initial commit
