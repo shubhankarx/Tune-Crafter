@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import ReactGA from 'react-ga4';
 import RegionsPlugin from 'wavesurfer.js/src/plugin/regions';
 import 'bootstrap/dist/css/bootstrap.css';
@@ -40,6 +40,7 @@ const GestureComponent = (props: GestureComponentProps) => {
     const [isRecording, setIsRecording] = useState<boolean>(false);
     const [recordingStartTime, setRecordingStartTime] = useState<number | null>(null); //msx: manage recording time
     const [frameBuffer, setFrameBuffer] = useState<any[]>([]); //msxL manage frame buffer
+    const isRecordingRef = useRef(isRecording); // useRef to track the recording state
 
     const handleRecordButtonClick = () => {
         setIsRecording(prevIsRecording => {
@@ -59,18 +60,27 @@ const GestureComponent = (props: GestureComponentProps) => {
     const [recordedGestures, setRecordedGestures] = useState<any[]>([]);
     const [classifier, setClassifier] = useState<any>(null);
     const [buttonColor, setButtonColor] = useState<string>('blue');
+    const MAX_RECORDING_DURATION = 2000; // 2 seconds
 
     //msx: This function starts the recording process by initializing the buffer and setting the recording state
     const startRecording = () => {
         setIsRecording(true);
         setFrameBuffer([]); // Clear any previous data
         setRecordingStartTime(Date.now()); // Record the start time
+
+        // Automatically stop recording after the max duration
+        setTimeout(() => {
+            if (isRecordingRef.current){ 
+            handleRecordButtonClick(); // Trigger the same function as the button click
+        }
+        }, MAX_RECORDING_DURATION);
     };
 
     //msx: Captures a single frame of gesture data and adds it to the frame buffer
     const captureFrame = (landmarks: any) => {
         if (isRecording && recordingStartTime) {
             const features = extractGestureFeatures(landmarks);
+            console.log("Captured Frame:", features);
             setFrameBuffer(prevBuffer => [...prevBuffer, features]); // Add the current frame's features to the buffer
         }
     };
@@ -85,6 +95,10 @@ const GestureComponent = (props: GestureComponentProps) => {
                 setRecordedGestures(prevGestures => [...prevGestures, gesture]); // Save the gesture
                 console.log("Gesture recorded:", gesture);
             }
+            else {
+                console.log("No frames to capture");
+            }
+            
             setRecordingStartTime(null); // Reset the recording start time
         }
     };
@@ -103,7 +117,8 @@ const GestureComponent = (props: GestureComponentProps) => {
             });
             setAudioObjects();
         }
-    }, [video, waveform]);
+        isRecordingRef.current = isRecording; //Update the ref with latest recording state 
+    }, [video, waveform, isRecording]);
 
     const createGestureRecognizer = async () => {
         let recognizer = await loadModelWithRetry();
@@ -169,7 +184,7 @@ const GestureComponent = (props: GestureComponentProps) => {
                 //console.log("Video is loaded and has dimensions:", video.videoHeight, video.videoWidth);
                 try {
                     results = await gestureRecognizer.recognizeForVideo(video, Date.now());
-                    console.log("Gesture recognizer results:", results); // Add this log
+                    //console.log("Gesture recognizer results:", results); // Add this log
                     //console.log("Gesture recognizer returned results:", results);
                     if (isRecording) {
                         console.log("Attempting to store gesture"); // Log before storing
@@ -324,7 +339,7 @@ const GestureComponent = (props: GestureComponentProps) => {
     
     const storeGesture = (results: any) => {
         console.log("Gesture recognizer results:", results); // Check what `results` contains
-    
+        
         if (results && results.landmarks && results.landmarks.length > 0) {
             captureFrame(results.landmarks[0]);
             //const landmarks = results.landmarks[8];
@@ -365,19 +380,25 @@ const GestureComponent = (props: GestureComponentProps) => {
                 metrics: ['accuracy'],
             });
 
-            model.fit(xs, ys, {
-                epochs: 20,
-                callbacks: {
-                    onEpochEnd: (epoch, logs) => {
-                        console.log(`Epoch ${epoch}: loss = ${logs?.loss}`);
-                    }
+        // Train the model
+        model.fit(xs, ys, {
+            epochs: 20,
+            callbacks: {
+                onEpochEnd: (epoch, logs) => {
+                    console.log(`Epoch ${epoch + 1}: loss = ${logs?.loss}, accuracy = ${logs?.acc}`);
+                },
+                onTrainEnd: () => {
+                    console.log("Training complete");
                 }
-            }).then(() => {
-                setClassifier(model);
-                console.log("Model trained");
+            }
+        }).then(() => {
+            setClassifier(model);
+            console.log("Model trained successfully");
+        }).catch(error => {
+            console.error("Error during training:", error);
             });
         } else {
-            console.log("No recorded gestures to train on.");
+        console.log("No recorded gestures to train on.");
         }
     };
 
