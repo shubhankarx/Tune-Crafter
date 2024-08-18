@@ -93,7 +93,7 @@ const GestureComponent = (props: GestureComponentProps) => {
             if (frameBuffer.length > 0) {
                 const gesture = { x: frameBuffer, y: "gestureLabel", duration }; // Store the gesture along with its duration
                 setRecordedGestures(prevGestures => [...prevGestures, gesture]); // Save the gesture
-                console.log("Gesture recorded:", gesture);
+                //console.log("Gesture recorded:", gesture);
             }
             else {
                 console.log("No frames to capture");
@@ -187,11 +187,11 @@ const GestureComponent = (props: GestureComponentProps) => {
                     //console.log("Gesture recognizer results:", results); // Add this log
                     //console.log("Gesture recognizer returned results:", results);
                     if (isRecording) {
-                        console.log("Attempting to store gesture"); // Log before storing
+                        //console.log("Attempting to store gesture"); // Log before storing
                         storeGesture(results);
                     }
                     else {
-                        console.log("Recording is not active, not storing gesture");
+                        //console.log("Recording is not active, not storing gesture");
                     }
                     if (classifier) {
                         console.log("Attempting to recognize gesture"); // Log before recognizing
@@ -362,11 +362,24 @@ const GestureComponent = (props: GestureComponentProps) => {
     };
 
     const trainModel = () => {
+        console.log("Start");
         if (recordedGestures.length > 0) {
-            const inputs = recordedGestures.map(data => data.x);
+            const inputs = recordedGestures.map(data => {
+                return data.x.flat(); // Flatten the input features 
+                // A: The model expects a 1D array of features, so we flatten the 2D array  
+                // Check if the data is in the expected format
+                //if (Array.isArray(data.x) && data.x.every(Number.isFinite)) {
+                   
+                //} else {
+                    //console.error("Invalid data format", data);
+                    //return null;
+                //}
+            }).filter(input => input !== null);
+            console.log("Inputs:", inputs);
             const labels = recordedGestures.map(data => data.y === "gestureLabel" ? [1, 0, 0, 0] : [0, 1, 0, 0]);
 
             const xs = tf.tensor2d(inputs);
+            console.log("Tensor Shape:", xs.shape);
             const ys = tf.tensor2d(labels);
 
             const model = tf.sequential();
