@@ -41,6 +41,7 @@ const GestureComponent = (props: GestureComponentProps) => {
     const [recordingStartTime, setRecordingStartTime] = useState<number | null>(null); //msx: manage recording time
     const [frameBuffer, setFrameBuffer] = useState<any[]>([]); //msxL manage frame buffer
     const isRecordingRef = useRef(isRecording); // useRef to track the recording state
+    const SLIDING_WINDOW_SIZE = 10; // Number of frames to keep in the sliding window
 
     const handleRecordButtonClick = () => {
         setIsRecording(prevIsRecording => {
@@ -108,9 +109,14 @@ const GestureComponent = (props: GestureComponentProps) => {
             const features = extractGestureFeatures(normalizedLandmarks);
             console.log("Captured Frame:", features);
 
-
-            setFrameBuffer(prevBuffer => [...prevBuffer, features]); // Add the current frame's features to the buffer
-
+            //Need to change the sliding window
+            setFrameBuffer(prevBuffer => {
+                const updatedBuffer = [...prevBuffer, features];
+                if (updatedBuffer.length > SLIDING_WINDOW_SIZE) {
+                    updatedBuffer.shift(); // Remove the oldest frame to maintain the sliding window size
+                }
+                return updatedBuffer;
+            });
 
         }
     };
@@ -121,7 +127,8 @@ const GestureComponent = (props: GestureComponentProps) => {
         const normal_seq_len = 10;  // Sliding window size
         const features = new Array(feats_per_t * normal_seq_len).fill(0.0);
 
-        for (let t = 0; t < buffer.length; t++) {
+        //(depreacted) for (let t = 0; t < buffer.length; t++) { 
+        for (let t = 0; t < buffer.length && t < normal_seq_len; t++) {    
             const point = buffer[t];
             if (point.length > 0) {
                 for (let f = 0; f < point.length; f++) {
@@ -140,7 +147,8 @@ const GestureComponent = (props: GestureComponentProps) => {
             isRecordingRef.current = false; // Ensure the ref is updated immediately
             const duration = Date.now() - (recordingStartTime || 0); // Calculate the duration of the recording
             if (frameBuffer.length > 0) {
-                const gesture = { x: frameBuffer, y: "gestureLabel", duration }; // Store the gesture along with its duration
+                const features = extractFeatures(frameBuffer);
+                const gesture = { x: features, y: "gestureLabel", duration }; // Store the gesture along with its duration (Changed from FrameBuffer to features)
                 setRecordedGestures(prevGestures => [...prevGestures, gesture]); // Save the gesture
                 //console.log("Gesture recorded:", gesture);
             }
@@ -233,7 +241,7 @@ const GestureComponent = (props: GestureComponentProps) => {
                 //console.log("Video is loaded and has dimensions:", video.videoHeight, video.videoWidth);
                 try {
                     results = await gestureRecognizer.recognizeForVideo(video, Date.now());
-                    //console.log("Gesture recognizer results:", results); // Add this log
+                    //console.log("Webcam Gesture recognizer results:", results); // Add this log
                     //console.log("Gesture recognizer returned results:", results);
                     if (isRecordingRef.current ) {//msx: test with current ref
                         console.log("Should n't be on always: Attempting to store gesture"); // Log before storing
@@ -245,7 +253,7 @@ const GestureComponent = (props: GestureComponentProps) => {
                         //console.log("Recording is not active, not storing gesture");
                     }
                     if (classifier) {
-                        console.log("Attempting to recognize gesture"); // Log before recognizing
+                        //console.log("Attempting to recognize gesture"); // Log before recognizing
                         recognizeGesture(results.landmarks);
                     }
                     drawHands();
@@ -417,7 +425,8 @@ const GestureComponent = (props: GestureComponentProps) => {
         console.log("Start");
         if (recordedGestures.length > 0) {
             const inputs = recordedGestures.map(data => {
-                return data.x.flat(); // Flatten the input features 
+                return extractFeatures(data.x);
+                //data.x.flat(); // Flatten the input features 
                 // A: The model expects a 1D array of features, so we flatten the 2D array  
                 // Check if the data is in the expected format
                 //if (Array.isArray(data.x) && data.x.every(Number.isFinite)) {
@@ -469,11 +478,19 @@ const GestureComponent = (props: GestureComponentProps) => {
 
     const recognizeGesture = (landmarks: any) => {
         if (classifier) {
-            const features = extractGestureFeatures(landmarks[0]).flat();
-             //landmarks.map((point: any) => [point.x, point.y, point.z]).flat();
+            const features = extractFeatures(frameBuffer); // Use extractFeatures here
+            
+            //const features = extractGestureFeatures(landmarks[0]).flat(); (deprecated)
+            //landmarks.map((point: any) => [point.x, point.y, point.z]).flat();
             const input = tf.tensor2d([features]);
             classifier.predict(input).array().then((predictions: any) => {
-                console.log("Gesture recognized:", predictions);
+               // console.log("Gesture recognized:", predictions);
+                //q: explain the following code in comment below
+                // A: The model returns an array of probabilities for each class label.
+                if (predictions.length > 0) {
+                    //const predictedLabelIndex = predictions.indexOf(Math.max(...predictions));// Get the index of the highest probability
+                    //console.log("Predicted Gesture Index:", predictedLabelIndex);// Log the predicted label index 
+                }
                 // Implement sound playback based on the recognized gesture
             });
         } else {
