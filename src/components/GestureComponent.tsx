@@ -46,13 +46,13 @@ const GestureComponent = (props: GestureComponentProps) => {
         setIsRecording(prevIsRecording => {
             const newRecordingState = !prevIsRecording;
             console.log(newRecordingState ? "Started Recording" : "Stopped Recording");
-            
+            isRecordingRef.current = newRecordingState;
             if (newRecordingState) {
                 startRecording(); // Start recording if the new state is true
             } else {
                 stopRecording(); // Stop recording if the new state is false
             }
-    
+            
             return newRecordingState;
         });
     };
@@ -60,35 +60,84 @@ const GestureComponent = (props: GestureComponentProps) => {
     const [recordedGestures, setRecordedGestures] = useState<any[]>([]);
     const [classifier, setClassifier] = useState<any>(null);
     const [buttonColor, setButtonColor] = useState<string>('blue');
+    const [gestureLabel, setGestureLabel] = useState(""); // State to hold the gesture label
+
+    //msx: Handle the gesture label change
+    const handleLabelChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setGestureLabel(event.target.value);
+    };
+    
     const MAX_RECORDING_DURATION = 2000; // 2 seconds
+
+    const normalizeCoordinates = (landmarks: any) => {
+        const basePoint = landmarks[0]; // Assuming wrist as the base point
+        return landmarks.map((point: any) => ({
+            x: (point.x - basePoint.x),
+            y: (point.y - basePoint.y),
+            z: point.z ? (point.z - basePoint.z) : 0.0
+        }));
+    };
 
     //msx: This function starts the recording process by initializing the buffer and setting the recording state
     const startRecording = () => {
         setIsRecording(true);
         setFrameBuffer([]); // Clear any previous data
         setRecordingStartTime(Date.now()); // Record the start time
-
+        isRecordingRef.current = true; // Ensure the ref is updated immediately
+        console.log("Recording started");
         // Automatically stop recording after the max duration
-        setTimeout(() => {
+        const timeoutID = setTimeout(() => {
+            console.log("Inside setTimeout");
             if (isRecordingRef.current){ 
-            handleRecordButtonClick(); // Trigger the same function as the button click
+                console.log("Timeout triggered after 2 seconds");
+                handleRecordButtonClick(); // Trigger the same function as the button click
+                //setIsRecording(false); // Update the state to stop recording
         }
         }, MAX_RECORDING_DURATION);
+
+        // Optional: Clear timeout if component unmounts or recording stops before timeout
+        return () => clearTimeout(timeoutID);
     };
 
     //msx: Captures a single frame of gesture data and adds it to the frame buffer
     const captureFrame = (landmarks: any) => {
         if (isRecording && recordingStartTime) {
-            const features = extractGestureFeatures(landmarks);
+            //const features = extractGestureFeatures(landmarks);
+            console.log("Inside Capture Frame");
+            const normalizedLandmarks = normalizeCoordinates(landmarks);
+            const features = extractGestureFeatures(normalizedLandmarks);
             console.log("Captured Frame:", features);
+
+
             setFrameBuffer(prevBuffer => [...prevBuffer, features]); // Add the current frame's features to the buffer
+
+
         }
+    };
+
+    //msx: Feature extraction from the sliding window
+    const extractFeatures = (buffer: any[]) => {
+        const feats_per_t = 3;  // 2D (x, y) + 3D (z) = 3 features per time step
+        const normal_seq_len = 10;  // Sliding window size
+        const features = new Array(feats_per_t * normal_seq_len).fill(0.0);
+
+        for (let t = 0; t < buffer.length; t++) {
+            const point = buffer[t];
+            if (point.length > 0) {
+                for (let f = 0; f < point.length; f++) {
+                    features[feats_per_t * t + f] = point[f];
+                }
+            }
+        }
+
+        return features;
     };
 
     //msx: Stops the recording process, stores the gesture, and resets the recording state
     const stopRecording = () => {
         if (isRecording) {
             setIsRecording(false);
+            isRecordingRef.current = false; // Ensure the ref is updated immediately
             const duration = Date.now() - (recordingStartTime || 0); // Calculate the duration of the recording
             if (frameBuffer.length > 0) {
                 const gesture = { x: frameBuffer, y: "gestureLabel", duration }; // Store the gesture along with its duration
@@ -186,9 +235,11 @@ const GestureComponent = (props: GestureComponentProps) => {
                     results = await gestureRecognizer.recognizeForVideo(video, Date.now());
                     //console.log("Gesture recognizer results:", results); // Add this log
                     //console.log("Gesture recognizer returned results:", results);
-                    if (isRecording) {
-                        //console.log("Attempting to store gesture"); // Log before storing
+                    if (isRecordingRef.current ) {//msx: test with current ref
+                        console.log("Should n't be on always: Attempting to store gesture"); // Log before storing
+
                         storeGesture(results);
+
                     }
                     else {
                         //console.log("Recording is not active, not storing gesture");
@@ -334,6 +385,7 @@ const GestureComponent = (props: GestureComponentProps) => {
     const extractGestureFeatures = (landmarks: any) => {
         if (!landmarks || landmarks.length === 0) return [0.0, 0.0, 0.0, 0.0, 0.0];
         const keypoint = landmarks[8]; // Assume index 8 for a specific keypoint, Index Finger here, can be adjusted
+        //const keypoint3d = landmarks3d[8]; // Assume index 8 for a specific keypoint, Index Finger here, can be adjusted
         return [keypoint.x, keypoint.y, keypoint.z || 0.0]; // Consider x, y, and possibly z if available
     };
     
@@ -447,6 +499,19 @@ const GestureComponent = (props: GestureComponentProps) => {
 >
                 {isRecording ? "Stop Recording" : "Start Recording"}
             </button>
+            <input
+                type="text"
+                value={gestureLabel}
+                onChange={handleLabelChange}
+                placeholder="Enter Gesture Label"
+                style={{ 
+                    padding: '10px', 
+                    borderRadius: '5px', 
+                    marginRight: '10px', 
+                    zIndex: 2 
+                }}
+            />
+            <label>Current Label: {gestureLabel}</label>   
             <button onClick={() => {
                 console.log("Train Model button clicked");
                 trainModel();
