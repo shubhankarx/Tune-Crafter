@@ -130,9 +130,11 @@ const GestureComponent = (props: GestureComponentProps) => {
         //(depreacted) for (let t = 0; t < buffer.length; t++) { 
         for (let t = 0; t < buffer.length && t < normal_seq_len; t++) {    
             const point = buffer[t];
+            console.log("Point:", point);
             if (point.length > 0) {
                 for (let f = 0; f < point.length; f++) {
                     features[feats_per_t * t + f] = point[f];
+                    
                 }
             }
         }
@@ -241,7 +243,7 @@ const GestureComponent = (props: GestureComponentProps) => {
                 //console.log("Video is loaded and has dimensions:", video.videoHeight, video.videoWidth);
                 try {
                     results = await gestureRecognizer.recognizeForVideo(video, Date.now());
-                    //console.log("Webcam Gesture recognizer results:", results); // Add this log
+                    console.log("Webcam Gesture recognizer results:", results); // Add this log
                     //console.log("Gesture recognizer returned results:", results);
                     if (isRecordingRef.current ) {//msx: test with current ref
                         console.log("Should n't be on always: Attempting to store gesture"); // Log before storing
@@ -253,8 +255,9 @@ const GestureComponent = (props: GestureComponentProps) => {
                         //console.log("Recording is not active, not storing gesture");
                     }
                     if (classifier) {
-                        //console.log("Attempting to recognize gesture"); // Log before recognizing
+                        console.log("Attempting to recognize gesture"); // Log before recognizing
                         recognizeGesture(results.landmarks);
+
                     }
                     drawHands();
                     performAction();
@@ -480,6 +483,7 @@ const GestureComponent = (props: GestureComponentProps) => {
         if (classifier) {
             const features = extractFeatures(frameBuffer); // Use extractFeatures here
             
+            console.log(features);
             //const features = extractGestureFeatures(landmarks[0]).flat(); (deprecated)
             //landmarks.map((point: any) => [point.x, point.y, point.z]).flat();
             const input = tf.tensor2d([features]);
