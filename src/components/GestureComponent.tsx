@@ -25,6 +25,7 @@ interface GestureComponentProps {
 const GestureComponent = (props: GestureComponentProps) => {
     const { video, waveform, soundManager } = props;
     let gestureRecognizer: GestureRecognizer | null = null;
+    //const gestureRecognizerRef = useRef<GestureRecognizer | null>(null);
 
     let canvasElement: any | null = null;
     let canvasCtx: any | null = null;
@@ -37,11 +38,27 @@ const GestureComponent = (props: GestureComponentProps) => {
 
     const [volume, setVolume] = useState<number>(50);
     const [isVolumeVisible, setIsVolumeVisible] = useState<boolean>(false);
+    const [isTraining, setIsTraining] = useState<boolean>(false);
     const [isRecording, setIsRecording] = useState<boolean>(false);
     const [recordingStartTime, setRecordingStartTime] = useState<number | null>(null); //msx: manage recording time
     const [frameBuffer, setFrameBuffer] = useState<any[]>([]); //msxL manage frame buffer
     const isRecordingRef = useRef(isRecording); // useRef to track the recording state
     const SLIDING_WINDOW_SIZE = 10; // Number of frames to keep in the sliding window
+
+    const updateLabelMappings = (newLabel: string) => {
+        setGestureLabels(prevLabels => {
+            if (!prevLabels.includes(newLabel)) {
+                const updatedLabels = [...prevLabels, newLabel];
+                setLabelToIndex(prevMapping => ({
+                    ...prevMapping,
+                    [newLabel]: updatedLabels.length - 1
+                }));
+                return updatedLabels;
+            }
+            return prevLabels;
+        });
+    };
+
 
     const handleRecordButtonClick = () => {
         setIsRecording(prevIsRecording => {
@@ -61,7 +78,12 @@ const GestureComponent = (props: GestureComponentProps) => {
     const [recordedGestures, setRecordedGestures] = useState<any[]>([]);
     const [classifier, setClassifier] = useState<any>(null);
     const [buttonColor, setButtonColor] = useState<string>('blue');
-    const [gestureLabel, setGestureLabel] = useState(""); // State to hold the gesture label
+    const [gestureLabel, setGestureLabel] = useState<string>("");// Changed to string
+    const [labelToIndex, setLabelToIndex] = useState<{ [key: string]: number }>({});
+    const [modelTrained, setModelTrained] = useState<boolean>(false); // New state
+
+    // New state for mode
+    const [mode, setMode] = useState<'predefined' | 'self-created'>('predefined');
 
     //msx: Handle the gesture label change
     const handleLabelChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -82,6 +104,7 @@ const GestureComponent = (props: GestureComponentProps) => {
     //msx: This function starts the recording process by initializing the buffer and setting the recording state
     const startRecording = () => {
         setIsRecording(true);
+        setIsTraining(true);
         setFrameBuffer([]); // Clear any previous data
         setRecordingStartTime(Date.now()); // Record the start time
         isRecordingRef.current = true; // Ensure the ref is updated immediately
@@ -150,9 +173,15 @@ const GestureComponent = (props: GestureComponentProps) => {
             const duration = Date.now() - (recordingStartTime || 0); // Calculate the duration of the recording
             if (frameBuffer.length > 0) {
                 const features = extractFeatures(frameBuffer);
-                const gesture = { x: features, y: "gestureLabel", duration }; // Store the gesture along with its duration (Changed from FrameBuffer to features)
-                setRecordedGestures(prevGestures => [...prevGestures, gesture]); // Save the gesture
+                const gesture = { x: features, y: gestureLabel, duration }; // Store the gesture along with its duration (Changed from FrameBuffer to features)
+                setRecordedGestures(prevGestures => {
+                const updatedGestures = [...prevGestures, gesture];
+                console.log("Gesture recorded:", gesture);
+                console.log("All Recorded Gestures:", updatedGestures); // Log all gestures for verification
+                return updatedGestures;
                 //console.log("Gesture recorded:", gesture);
+            });
+                setFrameBuffer([]); // Clear frame buffer (optional)
             }
             else {
                 console.log("No frames to capture");
@@ -237,40 +266,26 @@ const GestureComponent = (props: GestureComponentProps) => {
     }
 
     const predictWebcam = async () => {
-        if (gestureRecognizer) {
-            setupCanvas();
-            if (video && video.videoHeight > 0 && video.videoWidth > 0) {
-                //console.log("Video is loaded and has dimensions:", video.videoHeight, video.videoWidth);
-                try {
-                    results = await gestureRecognizer.recognizeForVideo(video, Date.now());
-                    console.log("Webcam Gesture recognizer results:", results); // Add this log
-                    //console.log("Gesture recognizer returned results:", results);
-                    if (isRecordingRef.current ) {//msx: test with current ref
-                        console.log("Should n't be on always: Attempting to store gesture"); // Log before storing
-
-                        storeGesture(results);
-
-                    }
-                    else {
-                        //console.log("Recording is not active, not storing gesture");
-                    }
-                    if (classifier) {
-                        console.log("Attempting to recognize gesture"); // Log before recognizing
+        if (!gestureRecognizer) return;
+        setupCanvas();
+        if (video && video.videoHeight > 0 && video.videoWidth > 0) {
+            try {
+                results = await gestureRecognizer.recognizeForVideo(video, Date.now());
+                if (isRecordingRef.current) {
+                    storeGesture(results);
+                } else {
+                    // Skip triggering music functions if recording
+                    if (modelTrained && classifier) {
                         recognizeGesture(results.landmarks);
-
                     }
-                    drawHands();
                     performAction();
-                } catch (error) {
-                    console.error("Error during gesture recognition:", error);
                 }
-            } else {
-                console.log("Video not ready or dimensions not available.");
+                drawHands();
+            } catch (error) {
+                console.error("Error during gesture recognition:", error);
             }
-            requestAnimationFrame(predictWebcam);
-        } else {
-            console.log("Gesture recognizer not initialized.");
         }
+        requestAnimationFrame(predictWebcam);
     };
 
     const setAudioObjects = () => {
@@ -394,7 +409,7 @@ const GestureComponent = (props: GestureComponentProps) => {
 
     //msx: Extract gesture features using a consistent function
     const extractGestureFeatures = (landmarks: any) => {
-        if (!landmarks || landmarks.length === 0) return [0.0, 0.0, 0.0, 0.0, 0.0];
+        if (!landmarks || landmarks.length === 0) return [0.0, 0.0, 0.0];
         const keypoint = landmarks[8]; // Assume index 8 for a specific keypoint, Index Finger here, can be adjusted
         //const keypoint3d = landmarks3d[8]; // Assume index 8 for a specific keypoint, Index Finger here, can be adjusted
         return [keypoint.x, keypoint.y, keypoint.z || 0.0]; // Consider x, y, and possibly z if available
@@ -424,9 +439,10 @@ const GestureComponent = (props: GestureComponentProps) => {
         }
     };
 
-    const trainModel = () => {
-        console.log("Start");
+    const trainModel = async () => { // Changed to async
+        console.log("Start Training");
         if (recordedGestures.length > 0) {
+            // Normalize inputs
             const inputs = recordedGestures.map(data => {
                 return extractFeatures(data.x);
                 //data.x.flat(); // Flatten the input features 
@@ -446,64 +462,77 @@ const GestureComponent = (props: GestureComponentProps) => {
             console.log("Tensor Shape:", xs.shape);
             const ys = tf.tensor2d(labels);
 
-            const model = tf.sequential();
-            model.add(tf.layers.dense({ units: 64, activation: 'relu', inputShape: [inputs[0].length] }));
-            model.add(tf.layers.dense({ units: 32, activation: 'relu' }));
-            model.add(tf.layers.dense({ units: 4, activation: 'softmax' }));
+            const tfmodel = tf.sequential();
+            tfmodel.add(tf.layers.dense({ units: 64, activation: 'relu', inputShape: [inputs[0].length] }));
+            tfmodel.add(tf.layers.dense({ units: 32, activation: 'relu' }));
+            tfmodel.add(tf.layers.dense({ units: 4, activation: 'softmax' }));
 
-            model.compile({
+            tfmodel.compile({
                 optimizer: 'adam',
                 loss: 'categoricalCrossentropy',
                 metrics: ['accuracy'],
             });
 
-        // Train the model
-        model.fit(xs, ys, {
-            epochs: 20,
-            callbacks: {
-                onEpochEnd: (epoch, logs) => {
-                    console.log(`Epoch ${epoch + 1}: loss = ${logs?.loss}, accuracy = ${logs?.acc}`);
-                },
-                onTrainEnd: () => {
-                    console.log("Training complete");
-                }
+            // Train the model
+            try {
+                await tfmodel.fit(xs, ys, {
+                    epochs: 30, // Increased epochs
+                    validationSplit: 0.2, // Added validation split
+                    callbacks: {
+                        onEpochEnd: (epoch, logs) => {
+                            console.log(`Epoch ${epoch + 1}: loss = ${logs?.loss}, accuracy = ${logs?.acc}`);
+                        }
+                    }
+                });
+                console.log("Training complete");
+                setClassifier(tfmodel);
+                setModelTrained(true); // Set model trained
+                setMode('self-created'); // Switch to self-created gestures after training
+            } catch (error) {
+                console.error("Error during training:", error);
+            } finally {
+                setIsTraining(false);
             }
-        }).then(() => {
-            setClassifier(model);
-            console.log("Model trained successfully");
-        }).catch(error => {
-            console.error("Error during training:", error);
-            });
         } else {
-        console.log("No recorded gestures to train on.");
+            console.log("No recorded gestures to train on.");
         }
     };
 
     const recognizeGesture = (landmarks: any) => {
-        if (classifier) {
-            const features = extractFeatures(frameBuffer); // Use extractFeatures here
-            
-            console.log(features);
-            //const features = extractGestureFeatures(landmarks[0]).flat(); (deprecated)
-            //landmarks.map((point: any) => [point.x, point.y, point.z]).flat();
-            const input = tf.tensor2d([features]);
-            classifier.predict(input).array().then((predictions: any) => {
-               // console.log("Gesture recognized:", predictions);
-                //q: explain the following code in comment below
-                // A: The model returns an array of probabilities for each class label.
-                if (predictions.length > 0) {
-                    //const predictedLabelIndex = predictions.indexOf(Math.max(...predictions));// Get the index of the highest probability
-                    //console.log("Predicted Gesture Index:", predictedLabelIndex);// Log the predicted label index 
-                }
-                // Implement sound playback based on the recognized gesture
-            });
-        } else {
-            console.log("Classifier not available.");
-        }
+        if (!classifier) return;
+        // Flatten last frames
+        const features = extractFeatures(frameBuffer);
+        const inputTensor = tf.tensor2d([features]);
+        classifier.predict(inputTensor).array().then((predictions: any) => {
+            console.log("Gesture Predictions:", predictions[0]);
+            // Implement your label mapping here
+            const gestureLabels = ["Gesture1", "Gesture2", "Gesture3", "Gesture4"];
+            const predictedIndex = predictions[0].indexOf(Math.max(...predictions[0]));
+            const predictedGesture = gestureLabels[predictedIndex];
+            console.log("Detected Gesture:", predictedGesture);
+            // Trigger actions based on `predictedGesture` if in self-created mode
+            if (mode === 'self-created') {
+                // Implement your action mapping here
+            }
+        });
     };
 
     return (
         <>
+            <div style={{ marginTop: "20px", display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <button
+                    onClick={() => setMode('self-created')}
+                    className={`btn ${mode === 'self-created' ? 'btn-primary' : 'btn-outline-primary'}`}
+                >
+                    Self Created Gestures
+                </button>
+                <button
+                    onClick={() => setMode('predefined')}
+                    className={`btn ${mode === 'predefined' ? 'btn-primary' : 'btn-outline-primary'}`}
+                >
+                    Pre Defined Gestures
+                </button>
+            </div>
             <div style={{ marginTop: "20px" }}>
                 <p id='current_gesture' className="currGesture">🙌</p>
                 <p className="tooltipGesture">Current gesture</p>
@@ -512,12 +541,12 @@ const GestureComponent = (props: GestureComponentProps) => {
                 <VolumeProgressBar volume={volume}></VolumeProgressBar>
             </div>
             <div>
-            <canvas className="output_canvas" id="output_canvas" width="1280" height="720" style={{ position: 'absolute', top: 0, left: 0, zIndex: 1 }} />
+                <canvas className="output_canvas" id="output_canvas" width="1280" height="720" style={{ position: 'absolute', top: 0, left: 0, zIndex: 1 }} />
             </div>
             <button
                 onClick={handleRecordButtonClick}
                 style={{ backgroundColor: isRecording ? 'green' : 'blue', color: 'white', padding: '10px', borderRadius: '5px', position: 'relative', zIndex: 2 }}
->
+            >
                 {isRecording ? "Stop Recording" : "Start Recording"}
             </button>
             <input
@@ -536,9 +565,9 @@ const GestureComponent = (props: GestureComponentProps) => {
             <button onClick={() => {
                 console.log("Train Model button clicked");
                 trainModel();
-            }}style={{ backgroundColor: 'blue', color: 'white', padding: '10px', borderRadius: '5px', position: 'relative', zIndex: 2 }}
->  
-                Train Model</button>
+            }} style={{ backgroundColor: 'blue', color: 'white', padding: '10px', borderRadius: '5px', position: 'relative', zIndex: 2 }}>
+                Train Model
+            </button>
         </>
     );
 };
