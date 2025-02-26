@@ -1,0 +1,10 @@
+
+> tune-crafter-react-webapp@0.1.0 build
+> tsc && vite build
+
+src/components/GestureComponent.tsx(50,18): error TS6133: 'setUseAML' is declared but its value is never read.
+src/components/GestureComponent.tsx(96,9): error TS6133: 'handlePrediction' is declared but its value is never read.
+src/components/GestureComponent.tsx(122,12): error TS6133: 'buttonColor' is declared but its value is never read.
+src/components/GestureComponent.tsx(122,25): error TS6133: 'setButtonColor' is declared but its value is never read.
+src/components/GestureComponent.tsx(575,7): error TS6133: 'performALMPrediction' is declared but its value is never read.
+src/components/GestureComponent.tsx(592,31): error TS6133: 'landmarks' is declared but its value is never read.
