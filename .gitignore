@@ -4,6 +4,9 @@
 # Claude Code local config
 .claude/
 
+# Local reference doc — keep out of the repo
+/AML_Explainability_compressed_compressed.pdf
+
 # Logs
 logs
 *.log
