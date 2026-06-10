@@ -1,3 +1,9 @@
+# macOS
+.DS_Store
+
+# Claude Code local config
+.claude/
+
 # Logs
 logs
 *.log

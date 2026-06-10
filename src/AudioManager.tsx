@@ -12,6 +12,7 @@ export class AudioManager {
   private normalAudioBufferMap: Map<string, AudioBuffer>;  //With each sound
   private christmasAudioBufferMap: Map<string, AudioBuffer>;  //With each sound
   private pianoAudioBufferMap: Map<string, AudioBuffer>;  //With each sound
+  private customAudioBufferMap: Map<string, AudioBuffer>;  //Gesture-mapped sounds, mode-independent
   private currentSong: number = 0;
   private waveform: WaveSurfer | null = null;
   private speedValue: number = 1;
@@ -35,6 +36,7 @@ export class AudioManager {
     this.normalAudioBufferMap = new Map();
     this.christmasAudioBufferMap = new Map();
     this.pianoAudioBufferMap = new Map();
+    this.customAudioBufferMap = new Map();
 
     this.waveform = waveform;
 
@@ -69,6 +71,12 @@ export class AudioManager {
     this.loadSound('middle', 'assets/sounds/chords/solm.wav', "piano");
     this.loadSound('ring', 'assets/sounds/chords/rem.wav', "piano");
     this.loadSound('pinky', 'assets/sounds/chords/sibM.wav', "piano");
+
+    // Gesture-mapped sounds (played regardless of current mode)
+    this.loadSound('Drum', 'assets/sounds/custom/drum.ogg', "custom");
+    this.loadSound('Loop', 'assets/sounds/custom/loop.ogg', "custom");
+    this.loadSound('Melody', 'assets/sounds/custom/melody.ogg', "custom");
+    this.loadSound('Percussion', 'assets/sounds/custom/percussion.ogg', "custom");
   }
 
   // Load audio file and store it in the buffer
@@ -98,6 +106,9 @@ export class AudioManager {
       case "piano":
         this.pianoAudioBufferMap.set(name, audioBuffer);
         break;
+      case "custom":
+        this.customAudioBufferMap.set(name, audioBuffer);
+        break;
       default:
         break;
     }
@@ -112,6 +123,13 @@ export class AudioManager {
     if (this.audioContext) {
       const source = this.audioContext.createBufferSource();
       source.connect(this.audioContext.destination);
+
+      // Gesture-mapped sounds take priority and play in any mode.
+      if (this.customAudioBufferMap.has(name)) {
+        source.buffer = this.customAudioBufferMap.get(name)!;
+        source.start();
+        return;
+      }
 
       switch (currentMode.mode) {
         case "normal":
